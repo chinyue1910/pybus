@@ -37,8 +37,9 @@ class SqlAlchemyGenericRepository(GenericRepository[TEntity], Generic[TEntity, T
     def _default_stmt(self) -> Select[tuple[TModel]]:
         return select(self.orm_model)
 
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, correlation_id: uuid.UUID):
         self._session: Session = session
+        self._correlation_id: uuid.UUID = correlation_id
         self._identity_map: dict[uuid.UUID, TEntity | Removed] = dict()
 
     async def _paginate(
@@ -185,13 +186,13 @@ class SqlAlchemyGenericRepository(GenericRepository[TEntity], Generic[TEntity, T
         self._identity_map[entity.id] = entity
 
     @override
-    async def save_domain_events(self, correlation_id: uuid.UUID) -> list[DomainEvent]:
+    async def save_domain_events(self) -> list[DomainEvent]:
         events = await self.collect_events()
         self._session.add_all(
             [
                 DomainEventModel(
                     id=domain_event.id,
-                    correlation_id=correlation_id,
+                    correlation_id=self._correlation_id,
                     aggregate_id=domain_event.aggregate_id,
                     aggregate_type=domain_event.aggregate_type,
                     event_type=domain_event.event_type,

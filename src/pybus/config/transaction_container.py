@@ -1,0 +1,303 @@
+import inspect
+import uuid
+from collections.abc import Awaitable, Callable, Generator
+from functools import partial
+from logging import Logger
+from types import TracebackType, UnionType
+from typing import Any, TypeVar, get_args, get_origin, overload
+from uuid import UUID
+
+from celery import Celery
+from dependency_injector import containers, providers
+from dependency_injector.wiring import Provide, inject
+
+from ..application.commands import Command
+from ..application.queries import PaginationQuery, Query
+from ..domain.events import DomainEvent
+from ..infrastructure.database.session import DataBaseSession
+from ..infrastructure.logging import logger
+
+TResult = TypeVar("TResult")
+TDependency = TypeVar("TDependency")
+
+
+class TransactionContainer(containers.DeclarativeContainer):
+    correlation_id: providers.Provider[UUID] = providers.Dependency(instance_of=UUID)
+    session: providers.Provider[DataBaseSession] = providers.Dependency(instance_of=DataBaseSession)
+    logger: providers.Provider[Logger] = providers.Dependency(instance_of=Logger)
+    celery_app: providers.Provider[Celery] = providers.Dependency(instance_of=Celery)
+
+
+class DependencyProvider:
+    def __init__(self, container: containers.Container):
+        self._container: containers.Container = container
+
+    def resolve_provider_by_type(self, cls: type) -> providers.Provider[Any]:
+        def inspect_provider(provider: providers.Provider[Any]) -> bool:
+            if isinstance(provider, (providers.Factory, providers.Singleton)):
+                return issubclass(provider.cls, cls)
+            elif isinstance(provider, providers.Dependency):
+                return issubclass(provider.instance_of, cls)
+
+            return False
+
+        matching_providers = inspect.getmembers(self._container, inspect_provider)
+        if matching_providers:
+            if len(matching_providers) > 1:
+                raise ValueError(
+                    f"Cannot uniquely resolve {cls}. Found {len(matching_providers)} matching resources."
+                )
+            return matching_providers[0][1]
+        raise ValueError(f"Cannot resolve {cls}")
+
+    def has_dependency(self, identifier: type[TDependency] | str) -> bool:
+        if isinstance(identifier, str):
+            return identifier in self._container.providers
+        else:
+            return bool(self.resolve_provider_by_type(identifier))
+
+    def register_dependency(self, identifier: type[TDependency] | str, value: TDependency) -> None:
+        if isinstance(identifier, str):
+            setattr(self._container, identifier, providers.Object(value))
+        else:
+            setattr(self._container, identifier.__name__, providers.Object(value))
+
+    def get_dependency(self, identifier: type[TDependency] | str) -> TDependency:
+        if isinstance(identifier, str):
+            provider = getattr(self._container, identifier)
+        else:
+            provider = self.resolve_provider_by_type(identifier)
+
+        return provider()
+
+
+class TransactionContext:
+    def __init__(self, dependency_provider: DependencyProvider):
+        self._dependency_provider: DependencyProvider = dependency_provider
+
+        self._on_enter_transaction_context: (
+            Callable[["TransactionContext"], Awaitable[None]] | None
+        ) = None
+        self._on_publish_scheduled_event: Callable[[DomainEvent], Awaitable[None]] | None = None
+        self._on_exit_transaction_context: (
+            Callable[["TransactionContext", BaseException | None], Awaitable[None]] | None
+        ) = None
+        self._middlewares: list[
+            Callable[["TransactionContext", Callable[[], Awaitable[Any]]], Awaitable[Any]]
+        ] = []
+        self._handlers_iterator: (
+            Callable[
+                [Command | Query[Any] | DomainEvent],
+                Generator[Callable[..., Awaitable[Any]], None, None],
+            ]
+            | None
+        ) = None
+
+    def configure(
+        self,
+        handlers_iterator: Callable[
+            [Command | Query[Any] | DomainEvent],
+            Generator[Callable[..., Awaitable[Any]], None, None],
+        ],
+        on_enter_transaction_context: Callable[["TransactionContext"], Awaitable[None]]
+        | None = None,
+        on_publish_scheduled_event: Callable[[DomainEvent], Awaitable[None]] | None = None,
+        on_exit_transaction_context: Callable[
+            ["TransactionContext", BaseException | None], Awaitable[None]
+        ]
+        | None = None,
+        middlewares: list[
+            Callable[["TransactionContext", Callable[[], Awaitable[Any]]], Awaitable[Any]]
+        ]
+        | None = None,
+    ) -> None:
+        self._handlers_iterator = handlers_iterator
+        self._on_enter_transaction_context = on_enter_transaction_context
+        self._on_publish_scheduled_event = on_publish_scheduled_event
+        self._on_exit_transaction_context = on_exit_transaction_context
+        self._middlewares = middlewares or []
+
+    def has_dependency(self, identifier: type[TDependency] | str) -> bool:
+        return self._dependency_provider.has_dependency(identifier)
+
+    def get_dependency(self, identifier: type[TDependency] | str) -> TDependency:
+        return self._dependency_provider.get_dependency(identifier)
+
+    def set_dependency(self, key: type[TDependency] | str, value: TDependency) -> None:
+        self._dependency_provider.register_dependency(key, value)
+
+    async def __aenter__(self) -> "TransactionContext":
+        if self._on_enter_transaction_context:
+            await self._on_enter_transaction_context(self)
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        if self._on_exit_transaction_context:
+            await self._on_exit_transaction_context(self, exc_val)
+
+    async def _resolve_parameters(
+        self,
+        handler: Callable[..., Awaitable[TResult]]
+        | Callable[..., Awaitable[tuple[int, TResult]]]
+        | Callable[..., Awaitable[None]],
+        message: Command | Query[TResult] | DomainEvent,
+        pagination: PaginationQuery | None = None,
+    ) -> dict[str, object]:
+        sinature = inspect.signature(handler)
+        parameters: dict[str, object] = {}
+        for name, param in sinature.parameters.items():
+            annotation = param.annotation
+
+            if annotation == inspect.Parameter.empty:
+                continue
+
+            if get_origin(annotation) is UnionType and any(
+                issubclass(arg, PaginationQuery) for arg in get_args(annotation)
+            ):
+                parameters[name] = pagination
+                continue
+
+            if isinstance(annotation, type) and issubclass(
+                annotation, (Command, Query, DomainEvent)
+            ):
+                parameters[name] = message
+                continue
+
+            if isinstance(annotation, type) and self.has_dependency(annotation):
+                parameters[name] = self.get_dependency(annotation)
+                continue
+
+            if self.has_dependency(name):
+                parameters[name] = self.get_dependency(name)
+                continue
+
+        return parameters
+
+    @overload
+    async def call(
+        self,
+        handler: Callable[..., Awaitable[None]],
+        message: Command,
+        pagination: None = None,
+    ) -> None: ...
+
+    @overload
+    async def call(
+        self,
+        handler: Callable[..., Awaitable[TResult]],
+        message: Query[TResult],
+        pagination: None = None,
+    ) -> TResult: ...
+
+    @overload
+    async def call(
+        self,
+        handler: Callable[..., Awaitable[tuple[int, TResult]]],
+        message: Query[TResult],
+        pagination: PaginationQuery,
+    ) -> tuple[int, TResult]: ...
+
+    @overload
+    async def call(
+        self,
+        handler: Callable[..., Awaitable[None]],
+        message: DomainEvent,
+        pagination: None = None,
+    ) -> None: ...
+
+    async def call(
+        self,
+        handler: Callable[..., Awaitable[None]]
+        | Callable[..., Awaitable[TResult]]
+        | Callable[..., Awaitable[tuple[int, TResult]]],
+        message: Command | Query[TResult] | DomainEvent,
+        pagination: PaginationQuery | None = None,
+    ) -> TResult | tuple[int, TResult] | None:
+        parameters = await self._resolve_parameters(handler, message, pagination)
+
+        call_next = partial(handler, **parameters)
+
+        for middleware in self._middlewares:
+            call_next = partial(middleware, self, call_next)
+
+        return await call_next()
+
+    async def execute_command(self, command: Command) -> None:
+        if self._handlers_iterator is None:
+            raise RuntimeError("Handlers iterator is not configured")
+
+        try:
+            for handler in self._handlers_iterator(command):
+                return await self.call(handler, command)
+        except Exception as ex:
+            logger.error(f"Executing command {command} failed with error: {ex}")
+            raise
+
+    @overload
+    async def execute_query(self, query: Query[TResult], pagination: None = None) -> TResult: ...
+
+    @overload
+    async def execute_query(
+        self, query: Query[TResult], pagination: PaginationQuery
+    ) -> tuple[int, TResult]: ...
+
+    async def execute_query(
+        self,
+        query: Query[TResult],
+        pagination: PaginationQuery | None = None,
+    ) -> TResult | tuple[int, TResult]:
+        if self._handlers_iterator is None:
+            raise RuntimeError("Handlers iterator is not configured")
+
+        try:
+            for handler in self._handlers_iterator(query):
+                return await self.call(handler, query, pagination)
+        except Exception as ex:
+            logger.error(f"Executing query {query} failed with error: {ex}")
+            raise
+
+        raise Exception(f"No handler found for query: {query}")
+
+    async def execute_event(self, event: DomainEvent) -> None:
+        if self._handlers_iterator is None:
+            raise RuntimeError("Handlers iterator is not configured")
+
+        try:
+            for handler in self._handlers_iterator(event):
+                return await self.call(handler, event)
+        except Exception as ex:
+            logger.error(f"Executing event {event} failed with error: {ex}")
+            raise
+
+    @inject
+    async def publish_event(
+        self,
+        message: DomainEvent,
+        celery_app: Celery = Provide[TransactionContainer.celery_app],
+        correlation_id: uuid.UUID = Provide[TransactionContainer.correlation_id],
+    ) -> None:
+        message.correlation_id = correlation_id
+
+        _ = celery_app.send_task(
+            name="ddd_bridge_task",
+            kwargs={
+                **message.model_dump(
+                    include={
+                        "id",
+                        "correlation_id",
+                        "aggregate_id",
+                        "aggregate_type",
+                        "event_type",
+                        "occurred_on",
+                        "version",
+                        "created_by_id",
+                    }
+                ),
+                **message.payload,
+            },
+        )

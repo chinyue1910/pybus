@@ -70,5 +70,5 @@ class GenericRepository(Generic[TEntity], ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    async def save_domain_events(self, correlation_id: uuid.UUID) -> list["DomainEvent"]:
+    async def save_domain_events(self) -> list["DomainEvent"]:
         raise NotImplementedError()
