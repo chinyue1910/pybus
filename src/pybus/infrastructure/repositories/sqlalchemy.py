@@ -1,0 +1,227 @@
+import uuid
+from abc import ABC, abstractmethod
+from typing import Generic, TypeVar, overload, override
+
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+from sqlalchemy.sql import Select
+
+from ...domain.entities import AggregateRoot
+from ...domain.events import DomainEvent
+from ...domain.exceptions import EntityNotFoundException, SoftDeleteException
+from ...domain.repositories import GenericRepository
+from ..database.sqlalchemy import Base, SoftDeleteMixin
+from ..models.sqlalchemy import DomainEvent as DomainEventModel
+
+TEntity = TypeVar("TEntity", bound=AggregateRoot)
+TModel = TypeVar("TModel", bound=Base)
+
+
+class Removed:
+    @override
+    def __repr__(self):
+        return "<Removed entity>"
+
+    @override
+    def __str__(self):
+        return "<Removed entity>"
+
+
+REMOVED = Removed()
+
+
+class SqlAlchemyGenericRepository(GenericRepository[TEntity], Generic[TEntity, TModel], ABC):
+    orm_model: type[TModel]
+
+    @property
+    def _default_stmt(self) -> Select[tuple[TModel]]:
+        return select(self.orm_model)
+
+    def __init__(self, session: Session):
+        self._session: Session = session
+        self._identity_map: dict[uuid.UUID, TEntity | Removed] = dict()
+
+    async def _paginate(
+        self, stmt: Select[tuple[TModel]], page: int = 1, size: int = 10
+    ) -> tuple[int, list[TModel]]:
+        total_stmt = select(func.count()).select_from(stmt.subquery())
+        items_stmt = stmt.offset((page - 1) * size).limit(size)
+
+        total = self._session.scalar(total_stmt) or 0
+        items = list(self._session.scalars(items_stmt).unique().all())
+        return total, items
+
+    @override
+    async def get_by_id(self, entity_id: uuid.UUID, skip_filter: bool = False) -> TEntity | None:
+        stmt = self._default_stmt.where(
+            getattr(self.orm_model, "id") == entity_id
+        ).execution_options(skip_filter=skip_filter and issubclass(self.orm_model, SoftDeleteMixin))
+        instance = self._session.scalar(stmt)
+        return await self._get_entity(instance) if instance else None
+
+    @override
+    async def get_by_ids(
+        self, entity_ids: list[uuid.UUID], skip_filter: bool = False
+    ) -> list[TEntity]:
+        stmt = self._default_stmt.where(
+            getattr(self.orm_model, "id").in_(entity_ids)
+        ).execution_options(skip_filter=skip_filter and issubclass(self.orm_model, SoftDeleteMixin))
+        instances = self._session.scalars(stmt).all()
+        return [await self._get_entity(instance) for instance in instances]
+
+    @overload
+    async def get_all(
+        self, page: None = None, size: None = None, skip_filter: bool = False
+    ) -> list[TEntity]: ...
+
+    @overload
+    async def get_all(
+        self, page: int = 1, size: int = 10, skip_filter: bool = False
+    ) -> tuple[int, list[TEntity]]: ...
+
+    @override
+    async def get_all(
+        self, page: int | None = None, size: int | None = None, skip_filter: bool = False
+    ) -> list[TEntity] | tuple[int, list[TEntity]]:
+        stmt = self._default_stmt.execution_options(
+            skip_filter=skip_filter and issubclass(self.orm_model, SoftDeleteMixin)
+        )
+        if page is not None and size is not None:
+            total, instances = await self._paginate(stmt, page or 1, size or 10)
+            return total, [await self._get_entity(instance) for instance in instances]
+
+        instances = self._session.scalars(stmt).all()
+        return [await self._get_entity(instance) for instance in instances]
+
+    @override
+    async def get_event_history(self, entity_id: uuid.UUID) -> list[DomainEvent]:
+        stmt = select(DomainEventModel).where(
+            DomainEventModel.aggregate_id == entity_id, DomainEventModel.version > 0
+        )
+        instances = self._session.scalars(stmt).all()
+        return [
+            DomainEvent.deserialize(
+                {
+                    "id": instance.id,
+                    "correlation_id": instance.correlation_id,
+                    "aggregate_id": instance.aggregate_id,
+                    "aggregate_type": instance.aggregate_type,
+                    "event_type": instance.event_type,
+                    "occurred_on": instance.occurred_on,
+                    "version": instance.version,
+                    "created_by_id": instance.created_by_id,
+                    **instance.payload,
+                },
+            )
+            for instance in instances
+        ]
+
+    @override
+    async def add(self, entity: TEntity):
+        self._identity_map[entity.id] = entity
+        instance = await self._entity_to_model(entity)
+        self._session.add(instance)
+
+    @override
+    async def persist(self, entity: TEntity):
+        if entity.id not in self._identity_map:
+            raise EntityNotFoundException(
+                repository_name=self.__class__.__name__, entity_id=entity.id
+            )
+
+        if self._identity_map[entity.id] is REMOVED:
+            raise EntityNotFoundException(
+                repository_name=self.__class__.__name__, entity_id=entity.id
+            )
+
+        instance = await self._entity_to_model(entity)
+        instance = self._session.merge(instance)
+
+    @override
+    async def persist_all(self):
+        for entity in self._identity_map.values():
+            if not isinstance(entity, Removed):
+                await self.persist(entity)
+
+    @override
+    async def collect_events(self) -> list[DomainEvent]:
+        return [
+            event
+            for entity in self._identity_map.values()
+            if not isinstance(entity, Removed)
+            for event in entity.collect_events()
+        ]
+
+    @override
+    async def remove(self, entity: TEntity):
+        if entity.id in self._identity_map:
+            if self._identity_map[entity.id] is REMOVED:
+                raise EntityNotFoundException(
+                    repository_name=self.__class__.__name__, entity_id=entity.id
+                )
+            self._identity_map[entity.id] = REMOVED
+
+        stmt = select(self.orm_model).where(getattr(self.orm_model, "id") == entity.id)
+        instance = self._session.scalar(stmt)
+        if not instance:
+            raise EntityNotFoundException(
+                repository_name=self.__class__.__name__, entity_id=entity.id
+            )
+
+        self._session.delete(instance)
+
+    @override
+    async def restore(self, entity: TEntity):
+        if entity.id not in self._identity_map or self._identity_map[entity.id] is not REMOVED:
+            raise EntityNotFoundException(
+                repository_name=self.__class__.__name__, entity_id=entity.id
+            )
+
+        instance = await self._entity_to_model(entity)
+        if not isinstance(instance, SoftDeleteMixin):
+            raise SoftDeleteException(repository_name=self.__class__.__name__, entity_id=entity.id)
+
+        instance.deleted_at = None
+        self._identity_map[entity.id] = entity
+
+    @override
+    async def save_domain_events(self, correlation_id: uuid.UUID) -> list[DomainEvent]:
+        events = await self.collect_events()
+        self._session.add_all(
+            [
+                DomainEventModel(
+                    id=domain_event.id,
+                    correlation_id=correlation_id,
+                    aggregate_id=domain_event.aggregate_id,
+                    aggregate_type=domain_event.aggregate_type,
+                    event_type=domain_event.event_type,
+                    occurred_on=domain_event.occurred_on,
+                    version=domain_event.version,
+                    created_by_id=domain_event.created_by_id,
+                    payload=domain_event.payload,
+                )
+                for domain_event in events
+            ]
+        )
+        return events
+
+    async def _get_entity(self, instance: TModel) -> TEntity:
+        entity = await self._model_to_entity(instance)
+        if entity.id in self._identity_map:
+            cached_entity = self._identity_map[entity.id]
+            if isinstance(cached_entity, Removed):
+                raise EntityNotFoundException(
+                    repository_name=self.__class__.__name__, entity_id=entity.id
+                )
+            return cached_entity
+
+        self._identity_map[entity.id] = entity
+        return entity
+
+    @abstractmethod
+    async def _entity_to_model(self, entity: TEntity) -> TModel:
+        raise NotImplementedError()
+
+    @abstractmethod
+    async def _model_to_entity(self, model: TModel) -> TEntity:
+        raise NotImplementedError()

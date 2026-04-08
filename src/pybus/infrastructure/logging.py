@@ -1,0 +1,75 @@
+import logging
+import os
+from logging.config import dictConfig
+
+
+class LoggerFactory:
+    _configured: bool = False
+
+    @classmethod
+    def configure(cls, logger_name: str = "app", log_relative_path: str = "logs/app.log"):
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_src_dir = os.path.abspath(os.path.join(current_dir, "../../"))
+        full_log_path = os.path.join(project_src_dir, log_relative_path)
+        os.makedirs(os.path.dirname(full_log_path), exist_ok=True)
+
+        cls.logger_name: str = logger_name
+        cls.log_filename: str = full_log_path
+        cls._configured = True
+
+    @classmethod
+    def create_logger(cls) -> logging.Logger:
+        if not cls._configured:
+            cls.configure()
+        logging_config = {
+            "version": 1,
+            "disable_existing_loggers": False,
+            "formatters": {
+                "default": {"format": "%(asctime)s %(name)-12s %(levelname)-8s %(message)s"},
+                "colored": {
+                    "()": "colorlog.ColoredFormatter",
+                    "format": "%(log_color)s%(asctime)s %(white)s%(name)-12s %(log_color)s%(levelname)-8s %(blue)s%(message)s",
+                    "datefmt": "%Y-%m-%d %H:%M:%S",
+                },
+            },
+            "handlers": {
+                "console": {
+                    "class": "logging.StreamHandler",
+                    "formatter": "default",
+                },
+                "colored_console": {
+                    "class": "logging.StreamHandler",
+                    "formatter": "colored",
+                },
+                "file_handler": {
+                    "class": "logging.handlers.RotatingFileHandler",
+                    "formatter": "default",
+                    "filename": cls.log_filename,
+                    "maxBytes": 10485760,
+                    "backupCount": 5,
+                    "encoding": "utf8",
+                },
+            },
+            "loggers": {
+                "uvicorn.access": {
+                    "level": "INFO",
+                    "handlers": ["console"],
+                    "propagate": False,
+                },
+                "uvicorn.error": {
+                    "level": "INFO",
+                    "handlers": ["console"],
+                    "propagate": False,
+                },
+                cls.logger_name: {
+                    "level": "DEBUG",
+                    "handlers": ["colored_console", "file_handler"],
+                    "propagate": False,
+                },
+            },
+        }
+        dictConfig(logging_config)
+        return logging.getLogger(cls.logger_name)
+
+
+logger = LoggerFactory.create_logger()
