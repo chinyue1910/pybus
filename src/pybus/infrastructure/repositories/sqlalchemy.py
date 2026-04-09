@@ -183,7 +183,8 @@ class SqlAlchemyGenericRepository(GenericRepository[TEntity], Generic[TEntity, T
             raise SoftDeleteException(repository_name=self.__class__.__name__, entity_id=entity.id)
 
         instance.deleted_at = None
-        self._identity_map[entity.id] = entity
+        instance = self._session.merge(instance)
+        self._identity_map[entity.id] = await self._model_to_entity(instance)
 
     @override
     async def save_domain_events(self) -> list[DomainEvent]:

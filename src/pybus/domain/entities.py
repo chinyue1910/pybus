@@ -2,7 +2,7 @@ import uuid
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Self
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 from .mixins import BusinessRuleValidationMixin
 
@@ -15,7 +15,7 @@ class Entity(BaseModel):
 
 
 class AggregateRoot(BusinessRuleValidationMixin, Entity):
-    _events: list["DomainEvent"] = Field(default_factory=list)
+    _events: list["DomainEvent"] = PrivateAttr(default_factory=list)
 
     def register_event(self, event: "DomainEvent"):
         self._events.append(event)
@@ -27,7 +27,7 @@ class AggregateRoot(BusinessRuleValidationMixin, Entity):
 
 
 class EventSourced(AggregateRoot, ABC):
-    _version: int = Field(default=0)
+    _version: int = PrivateAttr(default=0)
 
     @classmethod
     def rebuild(cls, events: list["DomainEvent"]) -> Self:

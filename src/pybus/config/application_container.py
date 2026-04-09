@@ -171,7 +171,9 @@ class Application(ApplicationModule):
         ctx = TransactionContext(
             DependencyProvider(
                 self._container.transaction_container(
-                    session=self._container.session(), logger=logger
+                    session=self._container.session(),
+                    kafka_producer=self._container.kafka_producer(),
+                    logger=logger,
                 )
             )
         )

@@ -13,7 +13,8 @@ class DataBaseSession(Protocol):
 
     def close(self) -> None: ...
 
-    def __aenter__(self) -> Self: ...
+    async def __aenter__(self) -> Self:
+        return self
 
     async def __aexit__(
         self,

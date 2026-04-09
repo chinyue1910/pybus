@@ -38,10 +38,9 @@ class InMemoryRepository(GenericRepository[Entity]):
         if page is not None and size is not None:
             start = (page - 1) * size
             end = start + size
-            items = items[start:end]
-            return items
+            return (len(items), items[start:end])
 
-        return list(items)
+        return items
 
     @override
     async def get_event_history(self, entity_id: uuid.UUID) -> list[DomainEvent]:

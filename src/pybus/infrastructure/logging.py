@@ -8,9 +8,8 @@ class LoggerFactory:
 
     @classmethod
     def configure(cls, logger_name: str = "pybus", log_relative_path: str = "logs/pybus.log"):
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        project_src_dir = os.path.abspath(os.path.join(current_dir, "../../"))
-        full_log_path = os.path.join(project_src_dir, log_relative_path)
+        project_dir = os.getcwd()
+        full_log_path = os.path.join(project_dir, log_relative_path)
         os.makedirs(os.path.dirname(full_log_path), exist_ok=True)
 
         cls.logger_name: str = logger_name

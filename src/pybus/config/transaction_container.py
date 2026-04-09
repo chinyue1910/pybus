@@ -278,7 +278,7 @@ class TransactionContext:
 
         try:
             for handler in self._handlers_iterator(event):
-                return await self.call(handler, event)
+                await self.call(handler, event)
         except Exception as ex:
             logger.error(f"Executing event {event} failed with error: {ex}")
             raise
