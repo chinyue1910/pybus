@@ -7,10 +7,9 @@ on:
 
 permissions:
   contents: write
-  packages: write
 
 jobs:
-  build-and-publish:
+  release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,12 +19,6 @@ jobs:
 
       - name: Build
         run: uv build
-
-      - name: Publish to GitHub Packages
-        run: uv publish --publish-url https://pkg.github.com/${{ github.repository }}/
-        env:
-          UV_PUBLISH_USERNAME: ${{ github.actor }}
-          UV_PUBLISH_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
