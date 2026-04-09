@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
   build-and-publish:
@@ -21,7 +22,7 @@ jobs:
         run: uv build
 
       - name: Publish to GitHub Packages
-        run: uv publish --publish-url https://pypi.pkg.github.com/${{ github.repository }}
+        run: uv publish --publish-url https://pkg.github.com/${{ github.repository }}/
         env:
           UV_PUBLISH_USERNAME: ${{ github.actor }}
           UV_PUBLISH_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
