@@ -7,9 +7,8 @@ from types import TracebackType, UnionType
 from typing import Any, TypeVar, get_args, get_origin, overload
 from uuid import UUID
 
-from celery import Celery
 from dependency_injector import containers, providers
-from dependency_injector.wiring import Provide, inject
+from kafka import KafkaProducer
 
 from ..application.commands import Command
 from ..application.queries import PaginationQuery, Query
@@ -22,10 +21,20 @@ TDependency = TypeVar("TDependency")
 
 
 class TransactionContainer(containers.DeclarativeContainer):
-    correlation_id: providers.Provider[UUID] = providers.Dependency(instance_of=UUID)
+    """
+    繼承 TransactionContainer 並加入下列 Provider
+    1. Repository
+    2. DomainService
+    3. Assembler
+    4. ApplicationService
+    """
+
+    correlation_id: providers.Provider[UUID] = providers.Object(uuid.uuid4())
+    kafka_producer: providers.Provider[KafkaProducer] = providers.Dependency(
+        instance_of=KafkaProducer
+    )
     session: providers.Provider[DataBaseSession] = providers.Dependency(instance_of=DataBaseSession)
     logger: providers.Provider[Logger] = providers.Dependency(instance_of=Logger)
-    celery_app: providers.Provider[Celery] = providers.Dependency(instance_of=Celery)
 
 
 class DependencyProvider:
@@ -274,30 +283,13 @@ class TransactionContext:
             logger.error(f"Executing event {event} failed with error: {ex}")
             raise
 
-    @inject
-    async def publish_event(
-        self,
-        message: DomainEvent,
-        celery_app: Celery = Provide[TransactionContainer.celery_app],
-        correlation_id: uuid.UUID = Provide[TransactionContainer.correlation_id],
-    ) -> None:
-        message.correlation_id = correlation_id
+    async def publish_event(self, message: DomainEvent) -> None:
+        kafka_producer = self.get_dependency(KafkaProducer)
+        correlation_id = self.get_dependency(UUID)
 
-        _ = celery_app.send_task(
-            name="ddd_bridge_task",
-            kwargs={
-                **message.model_dump(
-                    include={
-                        "id",
-                        "correlation_id",
-                        "aggregate_id",
-                        "aggregate_type",
-                        "event_type",
-                        "occurred_on",
-                        "version",
-                        "created_by_id",
-                    }
-                ),
-                **message.payload,
-            },
+        message.correlation_id = correlation_id
+        kafka_producer.send(  # pyright: ignore[reportUnknownMemberType]
+            topic="domain_events",
+            value=message.model_dump_json().encode("utf-8"),
+            key=str(message.aggregate_id).encode("utf-8"),
         )

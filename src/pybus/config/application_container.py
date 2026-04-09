@@ -1,11 +1,10 @@
-import uuid
 from collections.abc import Awaitable, Callable
 from functools import partial
-from logging import Logger
 from typing import Any, TypeVar, overload
 
-from celery import Celery
 from dependency_injector import containers, providers
+from kafka import KafkaProducer
+from sqlalchemy import create_engine
 
 from ..application import ApplicationModule
 from ..application.commands import Command
@@ -13,6 +12,7 @@ from ..application.queries import PaginationQuery, Query
 from ..domain.events import DomainEvent
 from ..domain.repositories import GenericRepository
 from ..infrastructure.database.session import DataBaseSession
+from ..infrastructure.database.sqlalchemy import SqlAlchemySession
 from ..infrastructure.logging import logger
 from .transaction_container import DependencyProvider, TransactionContainer, TransactionContext
 
@@ -20,25 +20,14 @@ TResult = TypeVar("TResult")
 
 
 def create_application(
-    container: containers.DeclarativeContainer, modules: list[ApplicationModule]
+    name: str,
+    container: "ApplicationContainer",
+    modules: list[ApplicationModule],
 ) -> "Application":
-    application = Application(name="pybus", container=container)
+    application = Application(name=name, container=container)
 
     for module in modules:
         application.include_module(module)
-
-    @application.on_create_transaction_context
-    def on_create_transaction_context() -> TransactionContext:  # pyright: ignore[reportUnusedFunction]
-        return TransactionContext(
-            DependencyProvider(
-                TransactionContainer(
-                    correlation_id=uuid.uuid4(),
-                    session=container.database_session,
-                    logger=logger,
-                    celery_app=container.celery_app,
-                )
-            )
-        )
 
     @application.on_enter_transaction_context
     async def on_enter_transaction_context(context: TransactionContext) -> None:  # pyright: ignore[reportUnusedFunction]
@@ -82,32 +71,47 @@ def create_application(
     return application
 
 
-def create_celery_app() -> Celery:
-    celery_app = Celery(name="pybus")
-    celery_app.conf.update(broker_url="redis://redis:6379/0", result_backend="redis://redis:6379/0")
-    celery_app.conf.update(timezone="Asia/Taipei", enable_utc=True)
-    return celery_app
-
-
 class ApplicationContainer(containers.DeclarativeContainer):
+    f"""
+    實做下列功能
+    1. 註冊 config {"application_name": str, "database_type": Literal["sqlalchemy"], "url": str}
+    2. 註冊 application_modules
+    3. 註冊 transaction_container
+    """
+
+    config: providers.Configuration = providers.Configuration()
+
     application_modules: providers.Provider[list[ApplicationModule]] = providers.List()
 
     application: providers.Provider["Application"] = providers.Singleton(
-        create_application, container=providers.Self(), modules=application_modules
+        create_application,
+        name=config.application_name,
+        container=providers.Self(),
+        modules=application_modules,
     )
 
-    celery_app: providers.Provider[Celery] = providers.Singleton(create_celery_app)
+    session: providers.Provider[DataBaseSession] = providers.Selector(
+        config.database_type,
+        sqlalchemy=providers.Factory(
+            SqlAlchemySession,
+            engine=providers.Singleton(create_engine, url=config.url),
+        ),
+    )
 
-    database_session: providers.Provider[DataBaseSession] = providers.Dependency(
-        instance_of=DataBaseSession
+    kafka_producer: providers.Provider[KafkaProducer] = providers.Singleton(
+        KafkaProducer,
+        bootstrap_servers=config.kafka_bootstrap_servers,
+    )
+
+    transaction_container: providers.Provider[TransactionContainer] = providers.Dependency(
+        instance_of=TransactionContainer
     )
 
 
 class Application(ApplicationModule):
-    def __init__(self, name: str, container: containers.Container):
+    def __init__(self, name: str, container: ApplicationContainer):
         super().__init__(name=name)
-        self._container: containers.Container = container
-        self._on_create_transaction_context: Callable[[], TransactionContext] | None = None
+        self._container: ApplicationContainer = container
         self._on_enter_transaction_context: (
             Callable[[TransactionContext], Awaitable[None]] | None
         ) = None
@@ -146,10 +150,6 @@ class Application(ApplicationModule):
 
             return await ctx.execute_query(message, pagination)
 
-    def on_create_transaction_context(self, func: Callable[[], TransactionContext]):
-        self._on_create_transaction_context = func
-        return func
-
     def on_enter_transaction_context(self, func: Callable[[TransactionContext], Awaitable[None]]):
         self._on_enter_transaction_context = func
         return func
@@ -168,21 +168,13 @@ class Application(ApplicationModule):
         return func
 
     def transaction_context(self) -> TransactionContext:
-        if self._on_create_transaction_context:
-            ctx = self._on_create_transaction_context()
-        else:
-            ctx = TransactionContext(
-                DependencyProvider(
-                    TransactionContainer(
-                        correlation_id=uuid.uuid4(),
-                        session=self._container.database_session,
-                        logger=logger,
-                        celery_app=self._container.celery_app,
-                    )
+        ctx = TransactionContext(
+            DependencyProvider(
+                self._container.transaction_container(
+                    session=self._container.session(), logger=logger
                 )
             )
-
-        ctx.set_dependency(Logger, logger)
+        )
         ctx.configure(
             handlers_iterator=self.get_handlers,
             on_enter_transaction_context=self._on_enter_transaction_context,

@@ -78,7 +78,7 @@ class InMemoryRepository(GenericRepository[Entity]):
         self.objects[entity.id] = entity
 
     @override
-    async def save_domain_events(self, correlation_id: uuid.UUID) -> list[DomainEvent]:
+    async def save_domain_events(self) -> list[DomainEvent]:
         events: list[DomainEvent] = []
         for entity in self.objects.values():
             if isinstance(entity, AggregateRoot):

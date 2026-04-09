@@ -7,7 +7,6 @@ from .commands import Command
 from .queries import Query
 
 TResult = TypeVar("TResult")
-TInterface = TypeVar("TInterface")
 
 
 class ApplicationModule:
@@ -24,15 +23,6 @@ class ApplicationModule:
 
     def include_module(self, module: "ApplicationModule"):
         self._sub_modules.add(module)
-
-    def register_dependency(self, interface: type[TInterface]):
-        def decorator(
-            func: Callable[..., Awaitable[TInterface] | AsyncGenerator[TInterface]],
-        ):
-            self._dependencies[interface] = func
-            return func
-
-        return decorator
 
     def register_handler(self, message_type: type[Command | DomainEvent | Query[TResult]]):
         def decorator(
