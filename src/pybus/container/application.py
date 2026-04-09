@@ -14,7 +14,7 @@ from ..domain.repositories import GenericRepository
 from ..infrastructure.database.session import DataBaseSession
 from ..infrastructure.database.sqlalchemy import SqlAlchemySession
 from ..infrastructure.logging import logger
-from .transaction_container import DependencyProvider, TransactionContainer, TransactionContext
+from .transaction import DependencyProvider, TransactionContainer, TransactionContext
 
 TResult = TypeVar("TResult")
 

@@ -4,7 +4,7 @@ from typing import Any, Callable, TypeVar, overload
 
 from ..domain.events import DomainEvent
 from .commands import Command
-from .queries import Query
+from .queries import Query, PaginationQuery
 
 TResult = TypeVar("TResult")
 
@@ -65,3 +65,11 @@ class ApplicationModule:
         self, message: Command | DomainEvent | Query[TResult]
     ) -> Generator[Callable[..., Awaitable[None]] | Callable[..., Awaitable[TResult]], None, None]:
         return self._iterate_handlers(message)
+
+
+__all__ = [
+    "ApplicationModule",
+    "Command",
+    "Query",
+    "PaginationQuery",
+]
