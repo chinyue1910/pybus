@@ -21,7 +21,7 @@ jobs:
         run: uv build
 
       - name: Publish to GitHub Packages
-        run: uv publish --publish-url https://pypi.pkg.github.com/${{ github.repository_owner }}/
+        run: uv publish --publish-url https://pypi.pkg.github.com/${{ github.repository }}
         env:
           UV_PUBLISH_USERNAME: ${{ github.actor }}
           UV_PUBLISH_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
