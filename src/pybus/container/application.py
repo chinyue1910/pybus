@@ -1,6 +1,6 @@
 from collections.abc import Awaitable, Callable
 from functools import partial
-from typing import Any, TypeVar, overload
+from typing import Any, TypeVar, cast, overload
 
 from dependency_injector import containers, providers
 from kafka import KafkaProducer
@@ -104,8 +104,14 @@ class ApplicationContainer(containers.DeclarativeContainer):
         bootstrap_servers=config.KAFKA_BOOTSTRAP_SERVERS,
     )
 
-    transaction_container: providers.Provider[TransactionContainer] = providers.Dependency(
-        instance_of=TransactionContainer
+    transaction_cls: providers.Provider[type[TransactionContainer]] = providers.Dependency(
+        instance_of=type[TransactionContainer], default=TransactionContainer
+    )
+
+    transaction_container: providers.Provider[TransactionContainer] = providers.Factory(
+        transaction_cls.provided,
+        session=session,
+        kafka_producer=kafka_producer,
     )
 
 
@@ -169,14 +175,7 @@ class Application(ApplicationModule):
         return func
 
     def transaction_context(self) -> TransactionContext:
-        ctx = TransactionContext(
-            DependencyProvider(
-                self._container.transaction_container(
-                    session=self._container.session(),
-                    kafka_producer=self._container.kafka_producer(),
-                )
-            )
-        )
+        ctx = TransactionContext(DependencyProvider(self._container.transaction_container()))
         ctx.configure(
             handlers_iterator=self.get_handlers,
             on_enter_transaction_context=self._on_enter_transaction_context,
