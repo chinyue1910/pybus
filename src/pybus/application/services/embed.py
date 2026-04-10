@@ -1,0 +1,17 @@
+from abc import ABC, abstractmethod
+
+
+class EmbedService(ABC):
+    @abstractmethod
+    def embed(self, content: str, output_dimensionality: int = 768) -> list[float]:
+        """
+        Generate an embedding for the given content.
+
+        Args:
+            content: The content to embed.
+            output_dimensionality: The desired dimensionality of the embedding.
+
+        Returns:
+            A list of floats representing the embedding.
+        """
+        raise NotImplementedError()

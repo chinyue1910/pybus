@@ -12,8 +12,10 @@ from kafka import KafkaProducer
 
 from ..application.commands import Command
 from ..application.queries import PaginationQuery, Query
+from ..application.services import EmbedService
 from ..domain.events import DomainEvent
 from ..infrastructure.database.session import DataBaseSession
+from ..infrastructure.services import GenAIEmbedService
 from ..infrastructure.logging import logger
 
 TResult = TypeVar("TResult")
@@ -29,12 +31,17 @@ class TransactionContainer(containers.DeclarativeContainer):
     4. ApplicationService
     """
 
+    config: providers.Configuration = providers.Configuration()
     correlation_id: providers.Provider[UUID] = providers.Object(uuid.uuid4())
     kafka_producer: providers.Provider[KafkaProducer] = providers.Dependency(
         instance_of=KafkaProducer
     )
     session: providers.Provider[DataBaseSession] = providers.Dependency(instance_of=DataBaseSession)
     logger: providers.Provider[Logger] = providers.Dependency(instance_of=Logger)
+
+    embed_service: providers.Provider[EmbedService] = providers.Factory(
+        GenAIEmbedService, gemini_api_key=config.gemini_api_key
+    )
 
 
 class DependencyProvider:

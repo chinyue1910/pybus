@@ -74,7 +74,7 @@ def create_application(
 class ApplicationContainer(containers.DeclarativeContainer):
     f"""
     實做下列功能
-    1. 註冊 config {"application_name": str, "database_type": Literal["sqlalchemy"], "url": str}
+    1. 註冊 config {"application_name": str, "database_type": Literal["sqlalchemy"], "url": str, "gemini_api_key": str}
     2. 註冊 application_modules
     3. 註冊 transaction_container
     """
@@ -171,6 +171,7 @@ class Application(ApplicationModule):
         ctx = TransactionContext(
             DependencyProvider(
                 self._container.transaction_container(
+                    config=self._container.config,
                     session=self._container.session(),
                     kafka_producer=self._container.kafka_producer(),
                     logger=logger,
