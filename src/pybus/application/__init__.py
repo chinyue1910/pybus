@@ -4,7 +4,7 @@ from typing import Any, Callable, TypeVar, overload
 
 from ..domain.events import DomainEvent
 from .commands import Command
-from .queries import Query, PaginationQuery
+from .queries import Query
 
 TResult = TypeVar("TResult")
 
@@ -67,9 +67,4 @@ class ApplicationModule:
         return self._iterate_handlers(message)
 
 
-__all__ = [
-    "ApplicationModule",
-    "Command",
-    "Query",
-    "PaginationQuery",
-]
+__all__ = ["ApplicationModule", "Command", "Query"]

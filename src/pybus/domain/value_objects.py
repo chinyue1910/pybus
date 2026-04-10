@@ -1,4 +1,4 @@
-from typing import Any, ClassVar, override
+from typing import Any, BinaryIO, ClassVar, override
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -22,3 +22,18 @@ class ValueObject(BaseModel):
         return target_cls.model_validate(data)
 
     model_config: ClassVar[ConfigDict] = ConfigDict(frozen=True)
+
+
+class FileObject(ValueObject):
+    filename: str
+    content_type: str
+    size: int
+    stream: BinaryIO
+
+    def to_bytes(self) -> bytes:
+        _ = self.stream.seek(0)
+        return self.stream.read()
+
+    def __post_init__(self):
+        if self.size > 2 * 1024 * 1024:
+            raise ValueError("File size exceeds the maximum limit of 2MB")

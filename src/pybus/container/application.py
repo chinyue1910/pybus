@@ -4,16 +4,17 @@ from typing import Any, TypeVar, overload
 
 from dependency_injector import containers, providers
 from kafka import KafkaProducer
+from pydantic_settings import BaseSettings
 from sqlalchemy import create_engine
 
 from ..application import ApplicationModule
 from ..application.commands import Command
-from ..application.queries import PaginationQuery, Query
+from ..application.queries import Query
+from ..common.pagination import PaginationQuery
 from ..domain.events import DomainEvent
 from ..domain.repositories import GenericRepository
 from ..infrastructure.database.session import DataBaseSession
 from ..infrastructure.database.sqlalchemy import SqlAlchemySession
-from ..infrastructure.logging import logger
 from .transaction import DependencyProvider, TransactionContainer, TransactionContext
 
 TResult = TypeVar("TResult")
@@ -74,33 +75,33 @@ def create_application(
 class ApplicationContainer(containers.DeclarativeContainer):
     f"""
     實做下列功能
-    1. 註冊 config {"application_name": str, "database_type": Literal["sqlalchemy"], "url": str, "gemini_api_key": str}
+    1. 註冊 config {"APPLICATION_NAME": str, "DATABASE_TYPE": Literal["sqlalchemy"], "DATABASE_URL": str, "KAFKA_BOOTSTRAP_SERVERS": str}
     2. 註冊 application_modules
     3. 註冊 transaction_container
     """
 
-    config: providers.Configuration = providers.Configuration()
+    config: providers.Provider[BaseSettings] = providers.Dependency(instance_of=BaseSettings)
 
     application_modules: providers.Provider[list[ApplicationModule]] = providers.List()
 
     application: providers.Provider["Application"] = providers.Singleton(
         create_application,
-        name=config.application_name,
+        name=config.APPLICATION_NAME,
         container=providers.Self(),
         modules=application_modules,
     )
 
     session: providers.Provider[DataBaseSession] = providers.Selector(
-        config.database_type,
+        config.DATABASE_TYPE,
         sqlalchemy=providers.Factory(
             SqlAlchemySession,
-            engine=providers.Singleton(create_engine, url=config.url),
+            engine=providers.Singleton(create_engine, url=config.DATABASE_URL),
         ),
     )
 
     kafka_producer: providers.Provider[KafkaProducer] = providers.Singleton(
         KafkaProducer,
-        bootstrap_servers=config.kafka_bootstrap_servers,
+        bootstrap_servers=config.KAFKA_BOOTSTRAP_SERVERS,
     )
 
     transaction_container: providers.Provider[TransactionContainer] = providers.Dependency(
@@ -171,10 +172,8 @@ class Application(ApplicationModule):
         ctx = TransactionContext(
             DependencyProvider(
                 self._container.transaction_container(
-                    config=self._container.config,
                     session=self._container.session(),
                     kafka_producer=self._container.kafka_producer(),
-                    logger=logger,
                 )
             )
         )

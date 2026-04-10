@@ -69,6 +69,3 @@ class LoggerFactory:
         }
         dictConfig(logging_config)
         return logging.getLogger(cls.logger_name)
-
-
-logger = LoggerFactory.create_logger()

@@ -4,19 +4,17 @@ from collections.abc import Awaitable, Callable, Generator
 from functools import partial
 from logging import Logger
 from types import TracebackType, UnionType
-from typing import Any, TypeVar, get_args, get_origin, overload
+from typing import Any, TypeVar, final, get_args, get_origin, overload
 from uuid import UUID
 
 from dependency_injector import containers, providers
 from kafka import KafkaProducer
 
 from ..application.commands import Command
-from ..application.queries import PaginationQuery, Query
-from ..application.services import EmbedService
+from ..application.queries import Query
+from ..common.pagination import PaginationQuery
 from ..domain.events import DomainEvent
 from ..infrastructure.database.session import DataBaseSession
-from ..infrastructure.services import GenAIEmbedService
-from ..infrastructure.logging import logger
 
 TResult = TypeVar("TResult")
 TDependency = TypeVar("TDependency")
@@ -31,17 +29,12 @@ class TransactionContainer(containers.DeclarativeContainer):
     4. ApplicationService
     """
 
-    config: providers.Configuration = providers.Configuration()
     correlation_id: providers.Provider[UUID] = providers.Object(uuid.uuid4())
     kafka_producer: providers.Provider[KafkaProducer] = providers.Dependency(
         instance_of=KafkaProducer
     )
     session: providers.Provider[DataBaseSession] = providers.Dependency(instance_of=DataBaseSession)
     logger: providers.Provider[Logger] = providers.Dependency(instance_of=Logger)
-
-    embed_service: providers.Provider[EmbedService] = providers.Factory(
-        GenAIEmbedService, gemini_api_key=config.gemini_api_key
-    )
 
 
 class DependencyProvider:
@@ -87,7 +80,10 @@ class DependencyProvider:
         return provider()
 
 
+@final
 class TransactionContext:
+    DOMAIN_EVENTS_TOPIC = "domain_events"
+
     def __init__(self, dependency_provider: DependencyProvider):
         self._dependency_provider: DependencyProvider = dependency_provider
 
@@ -251,7 +247,9 @@ class TransactionContext:
             for handler in self._handlers_iterator(command):
                 return await self.call(handler, command)
         except Exception as ex:
-            logger.error(f"Executing command {command} failed with error: {ex}")
+            self._dependency_provider.get_dependency(Logger).error(
+                f"Executing command {command} failed with error: {ex}"
+            )
             raise
 
     @overload
@@ -274,7 +272,9 @@ class TransactionContext:
             for handler in self._handlers_iterator(query):
                 return await self.call(handler, query, pagination)
         except Exception as ex:
-            logger.error(f"Executing query {query} failed with error: {ex}")
+            self._dependency_provider.get_dependency(Logger).error(
+                f"Executing query {query} failed with error: {ex}"
+            )
             raise
 
         raise Exception(f"No handler found for query: {query}")
@@ -287,7 +287,9 @@ class TransactionContext:
             for handler in self._handlers_iterator(event):
                 await self.call(handler, event)
         except Exception as ex:
-            logger.error(f"Executing event {event} failed with error: {ex}")
+            self._dependency_provider.get_dependency(Logger).error(
+                f"Executing event {event} failed with error: {ex}"
+            )
             raise
 
     async def publish_event(self, message: DomainEvent) -> None:
@@ -296,7 +298,7 @@ class TransactionContext:
 
         message.correlation_id = correlation_id
         kafka_producer.send(  # pyright: ignore[reportUnknownMemberType]
-            topic="domain_events",
+            topic=self.DOMAIN_EVENTS_TOPIC,
             value=message.model_dump_json().encode("utf-8"),
             key=str(message.aggregate_id).encode("utf-8"),
         )

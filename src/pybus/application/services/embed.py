@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 
 class EmbedService(ABC):
     @abstractmethod
-    def embed(self, content: str, output_dimensionality: int = 768) -> list[float]:
+    def embed(self, content: str, output_dimensionality: int) -> list[float]:
         """
         Generate an embedding for the given content.
 

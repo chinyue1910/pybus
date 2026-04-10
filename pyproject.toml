@@ -13,6 +13,7 @@ dependencies = [
     "google-genai>=1.71.0",
     "inflection>=0.5.1",
     "kafka-python>=2.3.0",
+    "pydantic-settings>=2.13.1",
     "pydantic>=2.12.5",
 ]
 
