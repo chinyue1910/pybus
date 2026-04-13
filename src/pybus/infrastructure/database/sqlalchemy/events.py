@@ -5,7 +5,7 @@ from sqlalchemy.orm import ORMExecuteState, with_loader_criteria, Session
 from sqlalchemy.sql import ColumnElement
 from sqlalchemy.sql.schema import SchemaItem
 
-from .mixins import OperationMixin, SoftDeleteMixin
+from .mixins import SoftDeleteMixin
 from .base import Base
 
 
@@ -23,17 +23,6 @@ def before_flush(session: Session, flush_context, instances):  # pyright: ignore
             session.expunge(obj)
             obj.deleted_at = datetime.now()
             session.add(obj)
-
-    for obj in session.new:
-        if isinstance(obj, OperationMixin):
-            user_id = session.info.get("user_id", None)
-            obj.created_by_id = user_id if user_id else obj.created_by_id
-            obj.updated_by_id = user_id if user_id else obj.updated_by_id
-
-    for obj in session.dirty:
-        if isinstance(obj, OperationMixin):
-            user_id = session.info.get("user_id", None)
-            obj.updated_by_id = user_id if user_id else obj.updated_by_id
 
 
 @event.listens_for(Session, "do_orm_execute")
