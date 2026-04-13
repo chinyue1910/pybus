@@ -14,7 +14,8 @@ class Entity(BaseModel):
     id: uuid.UUID = Field(default_factory=uuid.uuid4)
 
 
-class AggregateRoot(BusinessRuleValidationMixin, Entity):
+class AggregateRoot(Entity, BusinessRuleValidationMixin, ABC):
+    _version: int = PrivateAttr(default=0)
     _events: list["DomainEvent"] = PrivateAttr(default_factory=list)
 
     def register_event(self, event: "DomainEvent"):
@@ -24,10 +25,6 @@ class AggregateRoot(BusinessRuleValidationMixin, Entity):
         events = self._events[:]
         self._events.clear()
         return events
-
-
-class EventSourced(AggregateRoot, ABC):
-    _version: int = PrivateAttr(default=0)
 
     @classmethod
     def rebuild(cls, events: list["DomainEvent"]) -> Self:
