@@ -36,8 +36,15 @@ class AggregateRoot(Entity, BusinessRuleValidationMixin, ABC):
     def load(self, events: list["DomainEvent"]):
         for event in events:
             self.apply(event)
+
+    def apply(self, event: "DomainEvent"):
+        self._apply(event)
+
+        if event.version is not None:
+            self._version = event.version
+        else:
             self._version += 1
 
     @abstractmethod
-    def apply(self, event: "DomainEvent"):
+    def _apply(self, event: "DomainEvent"):
         pass

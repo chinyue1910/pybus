@@ -14,7 +14,7 @@ class DomainEvent(BaseModel):
     aggregate_type: str = Field(title="聚合根類型")
     event_type: str = Field(init=False, title="事件類型")
     occurred_on: datetime = Field(default_factory=datetime.now, title="事件發生時間")
-    version: int = Field(default=0, title="事件版本")
+    version: int | None = Field(default=None, title="事件版本")
     created_by_id: uuid.UUID | None = Field(default=None, title="創建者 ID")
 
     @override
