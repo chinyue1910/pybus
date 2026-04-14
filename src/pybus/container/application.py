@@ -73,13 +73,6 @@ def create_application(
 
 
 class ApplicationContainer(containers.DeclarativeContainer):
-    f"""
-    實做下列功能
-    1. 註冊 config {"APPLICATION_NAME": str, "DATABASE_TYPE": Literal["sqlalchemy"], "DATABASE_URL": str, "KAFKA_BOOTSTRAP_SERVERS": str}
-    2. 註冊 application_modules
-    3. 註冊 transaction_container
-    """
-
     config: providers.Provider[BaseSettings] = providers.Dependency(instance_of=BaseSettings)
 
     application_modules: providers.Provider[list[ApplicationModule]] = providers.List()

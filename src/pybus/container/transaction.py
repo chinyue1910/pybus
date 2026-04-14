@@ -21,14 +21,6 @@ TDependency = TypeVar("TDependency")
 
 
 class TransactionContainer(containers.DeclarativeContainer):
-    """
-    繼承 TransactionContainer 並加入下列 Provider
-    1. Repository
-    2. DomainService
-    3. Assembler
-    4. ApplicationService
-    """
-
     correlation_id: providers.Provider[UUID] = providers.Object(uuid.uuid4())
     kafka_producer: providers.Provider[KafkaProducer] = providers.Dependency(
         instance_of=KafkaProducer
