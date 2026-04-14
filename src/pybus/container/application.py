@@ -99,8 +99,12 @@ class ApplicationContainer(containers.DeclarativeContainer):
         bootstrap_servers=config.provided.KAFKA_BOOTSTRAP_SERVERS,
     )
 
+    transaction_cls: providers.Provider[type[TransactionContainer]] = providers.Object(
+        TransactionContainer
+    )
+
     transaction_container: providers.Provider[TransactionContainer] = providers.Factory(
-        TransactionContainer,
+        transaction_cls.provided,
         session=session,
         kafka_producer=kafka_producer,
     )
