@@ -99,12 +99,8 @@ class ApplicationContainer(containers.DeclarativeContainer):
         bootstrap_servers=config.provided.KAFKA_BOOTSTRAP_SERVERS,
     )
 
-    transaction_cls: providers.Provider[type[TransactionContainer]] = providers.Dependency(
-        instance_of=type[TransactionContainer], default=TransactionContainer
-    )
-
     transaction_container: providers.Provider[TransactionContainer] = providers.Factory(
-        transaction_cls.provided,
+        TransactionContainer,
         session=session,
         kafka_producer=kafka_producer,
     )
