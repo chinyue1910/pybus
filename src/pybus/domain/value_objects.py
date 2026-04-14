@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class ValueObject(BaseModel):
     _registry: ClassVar[dict[str, type["ValueObject"]]] = {}
 
-    value_type: str = Field(init=False, title="值對象類型")
+    value_type: str = Field(init=False, description="值對象類型")
 
     @override
     def model_post_init(self, __context: Any) -> None:

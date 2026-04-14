@@ -1,4 +1,4 @@
-from typing import Self, override
+from typing import override
 
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session

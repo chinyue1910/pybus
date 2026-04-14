@@ -8,7 +8,7 @@ class Command(BaseModel):
     _registry: ClassVar[dict[str, type["Command"]]] = {}
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4)
-    command_type: str = Field(init=False, title="命令類型")
+    command_type: str = Field(init=False, description="命令類型")
 
     @override
     def model_post_init(self, __context: Any) -> None:
