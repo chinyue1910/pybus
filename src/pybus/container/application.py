@@ -1,6 +1,6 @@
 from collections.abc import Awaitable, Callable
 from functools import partial
-from typing import Any, TypeVar, cast, overload
+from typing import Any, TypeVar, overload
 
 from dependency_injector import containers, providers
 from kafka import KafkaProducer
@@ -10,7 +10,7 @@ from sqlalchemy import create_engine
 from ..application import ApplicationModule
 from ..application.commands import Command
 from ..application.queries import Query
-from ..common.pagination import PaginationQuery
+from ..application.common.pagination import PaginationQuery
 from ..domain.events import DomainEvent
 from ..domain.repositories import GenericRepository
 from ..infrastructure.database.session import DataBaseSession

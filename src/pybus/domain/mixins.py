@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from .common.exceptions import BusinessRuleValidationException
+from .exceptions import BusinessRuleValidationException
 
 if TYPE_CHECKING:
     from .rules import BusinessRule

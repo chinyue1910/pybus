@@ -12,7 +12,7 @@ from kafka import KafkaProducer
 
 from ..application.commands import Command
 from ..application.queries import Query
-from ..common.pagination import PaginationQuery
+from ..application.common.pagination import PaginationQuery
 from ..domain.events import DomainEvent
 from ..infrastructure.database.session import DataBaseSession
 

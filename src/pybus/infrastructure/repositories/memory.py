@@ -1,7 +1,7 @@
 import uuid
 from typing import overload, override
 
-from ...domain.entities import AggregateRoot, Entity, EventSourced
+from ...domain.entities import AggregateRoot, Entity
 from ...domain.events import DomainEvent
 from ...domain.repositories import GenericRepository
 
@@ -45,7 +45,7 @@ class InMemoryRepository(GenericRepository[Entity]):
     @override
     async def get_event_history(self, entity_id: uuid.UUID) -> list[DomainEvent]:
         entity = self.objects.get(entity_id, None)
-        if entity is not None and isinstance(entity, EventSourced):
+        if entity is not None and isinstance(entity, AggregateRoot):
             return [event for event in entity.collect_events()]
         return []
 

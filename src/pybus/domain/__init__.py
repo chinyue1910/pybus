@@ -1,4 +1,4 @@
-from .entities import Entity, AggregateRoot, EventSourced
+from .entities import Entity, AggregateRoot
 from .events import DomainEvent
 from .exceptions import (
     DomainException,
@@ -14,7 +14,6 @@ from .value_objects import ValueObject
 __all__ = [
     "Entity",
     "AggregateRoot",
-    "EventSourced",
     "DomainEvent",
     "DomainException",
     "BusinessRuleValidationException",
