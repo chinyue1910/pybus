@@ -4,17 +4,17 @@ from typing import Any, TypeVar, overload
 
 from dependency_injector import containers, providers
 from kafka import KafkaProducer
-from pydantic_settings import BaseSettings
 from sqlalchemy import create_engine
 
 from ..application import ApplicationModule
 from ..application.commands import Command
-from ..application.queries import Query
 from ..application.common.pagination import PaginationQuery
+from ..application.queries import Query
 from ..domain.events import DomainEvent
 from ..domain.repositories import GenericRepository
 from ..infrastructure.database.session import DataBaseSession
 from ..infrastructure.database.sqlalchemy import SqlAlchemySession
+from .config import ApplicationSettings
 from .transaction import DependencyProvider, TransactionContainer, TransactionContext
 
 TResult = TypeVar("TResult")
@@ -73,28 +73,30 @@ def create_application(
 
 
 class ApplicationContainer(containers.DeclarativeContainer):
-    config: providers.Provider[BaseSettings] = providers.Dependency(instance_of=BaseSettings)
+    config: providers.Provider[ApplicationSettings] = providers.Dependency(
+        instance_of=ApplicationSettings
+    )
 
     application_modules: providers.Provider[list[ApplicationModule]] = providers.List()
 
     application: providers.Provider["Application"] = providers.Singleton(
         create_application,
-        name=config.APPLICATION_NAME,
+        name=config.provided.APPLICATION_NAME,
         container=providers.Self(),
         modules=application_modules,
     )
 
     session: providers.Provider[DataBaseSession] = providers.Selector(
-        config.DATABASE_TYPE,
+        config.provided.DATABASE_TYPE,
         sqlalchemy=providers.Factory(
             SqlAlchemySession,
-            engine=providers.Singleton(create_engine, url=config.DATABASE_URL),
+            engine=providers.Singleton(create_engine, url=config.provided.DATABASE_URL),
         ),
     )
 
     kafka_producer: providers.Provider[KafkaProducer] = providers.Singleton(
         KafkaProducer,
-        bootstrap_servers=config.KAFKA_BOOTSTRAP_SERVERS,
+        bootstrap_servers=config.provided.KAFKA_BOOTSTRAP_SERVERS,
     )
 
     transaction_cls: providers.Provider[type[TransactionContainer]] = providers.Dependency(
