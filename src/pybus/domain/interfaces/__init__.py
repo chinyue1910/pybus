@@ -1,5 +1,5 @@
-from .cache import CacheProvider
-from .embed import EmbedService
-from .storage import StorageProvider
+from .cache import Cache
+from .embed import Embedder
+from .storage import Storage
 
-__all__ = ["CacheProvider", "EmbedService", "StorageProvider"]
+__all__ = ["Cache", "Embedder", "Storage"]
