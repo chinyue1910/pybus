@@ -6,6 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class ApplicationSettings(BaseSettings):
+    APPLICATION_NAME: str = "pybus"
     DATABASE_TYPE: Literal["sqlalchemy"] = "sqlalchemy"
 
     POSTGRES_SERVER: str = "postgres"
