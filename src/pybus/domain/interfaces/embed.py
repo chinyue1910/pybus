@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 
-class EmbedService(ABC):
+class Embedder(ABC):
     @abstractmethod
     def embed(self, content: str, output_dimensionality: int) -> list[float]:
         """
