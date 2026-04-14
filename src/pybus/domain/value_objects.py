@@ -1,6 +1,6 @@
 from typing import Any, BinaryIO, ClassVar
 
-from pydantic import BaseModel, ConfigDict, computed_field, field_validator
+from pydantic import BaseModel, ConfigDict, computed_field, model_validator
 
 
 class ValueObject(BaseModel):
@@ -29,13 +29,18 @@ class FileObject(ValueObject):
     size: int
     stream: BinaryIO
 
+    model_config: ClassVar[ConfigDict] = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    @model_validator(mode="after")
+    def compute_and_validate_size(self) -> "FileObject":
+        _ = self.stream.seek(0, 2)
+        size = self.stream.tell()
+        _ = self.stream.seek(0)
+        if size > 2 * 1024 * 1024:
+            raise ValueError("File size exceeds the maximum limit of 2MB")
+        object.__setattr__(self, "size", size)
+        return self
+
     def to_bytes(self) -> bytes:
         _ = self.stream.seek(0)
         return self.stream.read()
-
-    @field_validator("size")
-    @classmethod
-    def validate_file_size(cls, value: int) -> int:
-        if value > 2 * 1024 * 1024:
-            raise ValueError("File size exceeds the maximum limit of 2MB")
-        return value
