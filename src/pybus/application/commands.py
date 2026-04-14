@@ -1,22 +1,22 @@
 import uuid
-from typing import Any, ClassVar, override
+from typing import Any, ClassVar
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 
 class Command(BaseModel):
     _registry: ClassVar[dict[str, type["Command"]]] = {}
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4)
-    command_type: str = Field(init=False, description="命令類型")
 
-    @override
-    def model_post_init(self, __context: Any) -> None:
-        object.__setattr__(self, "command_type", self.__class__.__name__)
+    @computed_field
+    @property
+    def command_type(self) -> str:
+        return self.__class__.__name__
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
-        cls._registry[cls.command_type] = cls
+        cls._registry[cls.__name__] = cls
 
     @classmethod
     def deserialize(cls, data: dict[str, Any]) -> "Command":

@@ -1,8 +1,8 @@
 import uuid
-from typing import Any, ClassVar, override
+from typing import Any, ClassVar
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 
 class DomainEvent(BaseModel):
@@ -12,18 +12,18 @@ class DomainEvent(BaseModel):
     correlation_id: uuid.UUID | None = Field(default=None, description="執行 ID")
     aggregate_id: uuid.UUID = Field(description="聚合根 ID")
     aggregate_type: str = Field(description="聚合根類型")
-    event_type: str = Field(init=False, description="事件類型")
     occurred_on: datetime = Field(default_factory=datetime.now, description="事件發生時間")
     version: int | None = Field(default=None, description="事件版本")
     created_by_id: uuid.UUID | None = Field(default=None, description="創建者 ID")
 
-    @override
-    def model_post_init(self, __context: Any) -> None:
-        object.__setattr__(self, "event_type", self.__class__.__name__)
+    @computed_field
+    @property
+    def event_type(self) -> str:
+        return self.__class__.__name__
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
-        cls._registry[cls.event_type] = cls
+        cls._registry[cls.__name__] = cls
 
     @classmethod
     def deserialize(cls, data: dict[str, Any]) -> "DomainEvent":
