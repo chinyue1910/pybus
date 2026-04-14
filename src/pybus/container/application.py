@@ -1,6 +1,6 @@
 from collections.abc import Awaitable, Callable
 from functools import partial
-from typing import Any, TypeVar, overload
+from typing import Any, overload
 
 from dependency_injector import containers, providers
 from kafka import KafkaProducer
@@ -16,8 +16,6 @@ from ..infrastructure.database.session import DataBaseSession
 from ..infrastructure.database.sqlalchemy import SqlAlchemySession
 from .config import ApplicationSettings
 from .transaction import DependencyProvider, TransactionContainer, TransactionContext
-
-TResult = TypeVar("TResult")
 
 
 def create_application(
@@ -129,17 +127,19 @@ class Application(ApplicationModule):
     async def execute(self, message: Command, pagination: None = None) -> None: ...
 
     @overload
-    async def execute(self, message: Query[TResult], pagination: None = None) -> TResult: ...
+    async def execute[TResult](
+        self, message: Query[TResult], pagination: None = None
+    ) -> TResult: ...
 
     @overload
-    async def execute(
+    async def execute[TResult](
         self, message: Query[TResult], pagination: PaginationQuery
     ) -> tuple[int, TResult]: ...
 
     @overload
     async def execute(self, message: DomainEvent, pagination: None = None) -> None: ...
 
-    async def execute(
+    async def execute[TResult](
         self,
         message: Command | Query[TResult] | DomainEvent,
         pagination: PaginationQuery | None = None,

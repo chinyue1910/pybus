@@ -1,12 +1,10 @@
 from collections import defaultdict
 from collections.abc import AsyncGenerator, Awaitable, Generator
-from typing import Any, Callable, TypeVar, overload
+from typing import Any, Callable, overload
 
 from ..domain.events import DomainEvent
 from .commands import Command
 from .queries import Query
-
-TResult = TypeVar("TResult")
 
 
 class ApplicationModule:
@@ -24,7 +22,7 @@ class ApplicationModule:
     def include_module(self, module: "ApplicationModule"):
         self._sub_modules.add(module)
 
-    def register_handler(self, message_type: type[Command | DomainEvent | Query[TResult]]):
+    def register_handler[TResult](self, message_type: type[Command | DomainEvent | Query[TResult]]):
         def decorator(
             func: Callable[..., Awaitable[None] | Awaitable[TResult]],
         ):
@@ -39,7 +37,7 @@ class ApplicationModule:
     ) -> Generator[Callable[..., Awaitable[None]], None, None]: ...
 
     @overload
-    def _iterate_handlers(
+    def _iterate_handlers[TResult](
         self, message: Query[TResult]
     ) -> Generator[Callable[..., Awaitable[TResult]], None, None]: ...
 
@@ -48,7 +46,7 @@ class ApplicationModule:
         self, message: DomainEvent
     ) -> Generator[Callable[..., Awaitable[None]], None, None]: ...
 
-    def _iterate_handlers(
+    def _iterate_handlers[TResult](
         self, message: Command | Query[TResult] | DomainEvent
     ) -> Generator[
         Callable[..., Awaitable[None]] | Callable[..., Awaitable[TResult]],
@@ -61,7 +59,7 @@ class ApplicationModule:
         for sub_module in self._sub_modules:
             yield from sub_module._iterate_handlers(message)
 
-    def get_handlers(
+    def get_handlers[TResult](
         self, message: Command | DomainEvent | Query[TResult]
     ) -> Generator[Callable[..., Awaitable[None]] | Callable[..., Awaitable[TResult]], None, None]:
         return self._iterate_handlers(message)

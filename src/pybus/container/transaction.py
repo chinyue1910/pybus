@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable, Generator
 from functools import partial
 from logging import Logger
 from types import TracebackType, UnionType
-from typing import Any, TypeVar, final, get_args, get_origin, overload
+from typing import Any, final, get_args, get_origin, overload
 from uuid import UUID
 
 from dependency_injector import containers, providers
@@ -15,9 +15,6 @@ from ..application.queries import Query
 from ..application.common.pagination import PaginationQuery
 from ..domain.events import DomainEvent
 from ..infrastructure.database.session import DataBaseSession
-
-TResult = TypeVar("TResult")
-TDependency = TypeVar("TDependency")
 
 
 class TransactionContainer(containers.DeclarativeContainer):
@@ -51,19 +48,21 @@ class DependencyProvider:
             return matching_providers[0][1]
         raise ValueError(f"Cannot resolve {cls}")
 
-    def has_dependency(self, identifier: type[TDependency] | str) -> bool:
+    def has_dependency[TDependency](self, identifier: type[TDependency] | str) -> bool:
         if isinstance(identifier, str):
             return identifier in self._container.providers
         else:
             return bool(self.resolve_provider_by_type(identifier))
 
-    def register_dependency(self, identifier: type[TDependency] | str, value: TDependency) -> None:
+    def register_dependency[TDependency](
+        self, identifier: type[TDependency] | str, value: TDependency
+    ) -> None:
         if isinstance(identifier, str):
             setattr(self._container, identifier, providers.Object(value))
         else:
             setattr(self._container, identifier.__name__, providers.Object(value))
 
-    def get_dependency(self, identifier: type[TDependency] | str) -> TDependency:
+    def get_dependency[TDependency](self, identifier: type[TDependency] | str) -> TDependency:
         if isinstance(identifier, str):
             provider = getattr(self._container, identifier)
         else:
@@ -121,13 +120,13 @@ class TransactionContext:
         self._on_exit_transaction_context = on_exit_transaction_context
         self._middlewares = middlewares or []
 
-    def has_dependency(self, identifier: type[TDependency] | str) -> bool:
+    def has_dependency[TDependency](self, identifier: type[TDependency] | str) -> bool:
         return self._dependency_provider.has_dependency(identifier)
 
-    def get_dependency(self, identifier: type[TDependency] | str) -> TDependency:
+    def get_dependency[TDependency](self, identifier: type[TDependency] | str) -> TDependency:
         return self._dependency_provider.get_dependency(identifier)
 
-    def set_dependency(self, key: type[TDependency] | str, value: TDependency) -> None:
+    def set_dependency[TDependency](self, key: type[TDependency] | str, value: TDependency) -> None:
         self._dependency_provider.register_dependency(key, value)
 
     async def __aenter__(self) -> "TransactionContext":
@@ -144,7 +143,7 @@ class TransactionContext:
         if self._on_exit_transaction_context:
             await self._on_exit_transaction_context(self, exc_val)
 
-    async def _resolve_parameters(
+    async def _resolve_parameters[TResult](
         self,
         handler: Callable[..., Awaitable[TResult]]
         | Callable[..., Awaitable[tuple[int, TResult]]]
@@ -191,7 +190,7 @@ class TransactionContext:
     ) -> None: ...
 
     @overload
-    async def call(
+    async def call[TResult](
         self,
         handler: Callable[..., Awaitable[TResult]],
         message: Query[TResult],
@@ -199,7 +198,7 @@ class TransactionContext:
     ) -> TResult: ...
 
     @overload
-    async def call(
+    async def call[TResult](
         self,
         handler: Callable[..., Awaitable[tuple[int, TResult]]],
         message: Query[TResult],
@@ -214,7 +213,7 @@ class TransactionContext:
         pagination: None = None,
     ) -> None: ...
 
-    async def call(
+    async def call[TResult](
         self,
         handler: Callable[..., Awaitable[None]]
         | Callable[..., Awaitable[TResult]]
@@ -245,14 +244,16 @@ class TransactionContext:
             raise
 
     @overload
-    async def execute_query(self, query: Query[TResult], pagination: None = None) -> TResult: ...
+    async def execute_query[TResult](
+        self, query: Query[TResult], pagination: None = None
+    ) -> TResult: ...
 
     @overload
-    async def execute_query(
+    async def execute_query[TResult](
         self, query: Query[TResult], pagination: PaginationQuery
     ) -> tuple[int, TResult]: ...
 
-    async def execute_query(
+    async def execute_query[TResult](
         self,
         query: Query[TResult],
         pagination: PaginationQuery | None = None,

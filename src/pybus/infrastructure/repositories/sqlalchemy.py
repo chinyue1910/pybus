@@ -1,6 +1,6 @@
 import uuid
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar, overload, override
+from typing import overload, override
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -12,9 +12,6 @@ from ...domain.exceptions import EntityNotFoundException, SoftDeleteException
 from ...domain.repositories import GenericRepository
 from ..database.sqlalchemy import Base, SoftDeleteMixin
 from ..models.sqlalchemy import DomainEvent as DomainEventModel
-
-TEntity = TypeVar("TEntity", bound=AggregateRoot)
-TModel = TypeVar("TModel", bound=Base)
 
 
 class Removed:
@@ -30,7 +27,9 @@ class Removed:
 REMOVED = Removed()
 
 
-class SqlAlchemyGenericRepository(GenericRepository[TEntity], Generic[TEntity, TModel], ABC):
+class SqlAlchemyGenericRepository[TEntity: AggregateRoot, TModel: Base](
+    GenericRepository[TEntity], ABC
+):
     orm_model: type[TModel]
 
     @property

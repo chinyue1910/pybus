@@ -1,9 +1,6 @@
 import uuid
-from typing import TypeVar
 
 from pydantic import BaseModel, Field
-
-TResult = TypeVar("TResult")
 
 
 class Query[TResult](BaseModel):
