@@ -49,3 +49,6 @@ keep-runtime-typing = true
 
 [tool.ty.environment]
 root = ["src/pybus"]
+
+[tool.ty.rules]
+all = "error"

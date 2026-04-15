@@ -2,7 +2,8 @@ from collections import defaultdict
 from collections.abc import AsyncGenerator, Awaitable, Generator
 from typing import Any, Callable, overload
 
-from ..domain.events import DomainEvent
+from pybus.domain.events import DomainEvent
+
 from .commands import Command
 from .queries import Query
 
