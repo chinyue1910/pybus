@@ -7,4 +7,5 @@ class BusinessRule(BaseModel):
     def get_message(self) -> str:
         return self._message
 
-    def is_broken(self) -> bool: ...
+    def is_broken(self) -> bool:
+        raise NotImplementedError()

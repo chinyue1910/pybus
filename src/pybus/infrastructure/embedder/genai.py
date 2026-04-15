@@ -3,7 +3,7 @@ from typing import override
 from google import genai
 from google.genai.types import EmbedContentConfig
 
-from ...domain.interfaces import Embedder
+from pybus.domain.interfaces import Embedder
 
 
 class GenAI(Embedder):
@@ -12,7 +12,7 @@ class GenAI(Embedder):
 
     @override
     def embed(self, content: str, output_dimensionality: int = 768) -> list[float]:
-        response = self.client.models.embed_content(  # pyright: ignore[reportUnknownMemberType]
+        response = self.client.models.embed_content(
             model="gemini-embedding-2-preview",
             contents=content,
             config=EmbedContentConfig(output_dimensionality=output_dimensionality),

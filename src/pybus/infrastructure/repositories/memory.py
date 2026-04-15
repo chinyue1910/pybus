@@ -1,9 +1,9 @@
 import uuid
 from typing import overload, override
 
-from ...domain.entities import AggregateRoot, Entity
-from ...domain.events import DomainEvent
-from ...domain.repositories import GenericRepository
+from pybus.domain.entities import AggregateRoot, Entity
+from pybus.domain.events import DomainEvent
+from pybus.domain.repositories import GenericRepository
 
 
 class InMemoryRepository(GenericRepository[Entity]):

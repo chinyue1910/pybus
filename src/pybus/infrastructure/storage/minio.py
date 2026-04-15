@@ -8,8 +8,8 @@ from minio import Minio as MinioClient
 from minio.commonconfig import ENABLED, Filter
 from minio.lifecycleconfig import Expiration, LifecycleConfig, Rule
 
-from ...domain.interfaces import Storage
-from ...domain.value_objects import FileObject
+from pybus.domain.interfaces import Storage
+from pybus.domain.value_objects import FileObject
 
 
 class Minio(Storage):

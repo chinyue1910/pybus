@@ -1,8 +1,0 @@
-{
-    "basedpyright.analysis.diagnosticSeverityOverrides": {
-        "reportAny": "none",
-        "reportExplicitAny": "none"
-    },
-    "basedpyright.importStrategy": "useBundled",
-    "basedpyright.analysis.configFilePath": "${workspaceFolder}/src/pybus"
-}

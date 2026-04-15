@@ -1,8 +1,8 @@
-from typing import override, cast
+from typing import cast, override
 
 from redis import Redis
 
-from ...domain.interfaces import Cache
+from pybus.domain.interfaces import Cache
 
 
 class RedisCache(Cache):
@@ -31,7 +31,7 @@ class RedisCache(Cache):
     @override
     def get_set(self, key: str) -> set[str]:
         with self._client as client:
-            result = cast(set[str], client.smembers(key))  # pyright: ignore[reportUnknownMemberType]
+            result = cast(set[str], client.smembers(key))
             return result
 
     @override
@@ -56,4 +56,4 @@ class RedisCache(Cache):
 
     def flushall(self) -> None:
         with self._client as client:
-            _ = client.flushall()  # pyright: ignore[reportUnknownMemberType]
+            _ = client.flushall()

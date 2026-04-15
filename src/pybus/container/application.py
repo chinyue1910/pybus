@@ -6,14 +6,15 @@ from dependency_injector import containers, providers
 from kafka import KafkaProducer
 from sqlalchemy import create_engine
 
-from ..application import ApplicationModule
-from ..application.commands import Command
-from ..application.common.pagination import PaginationQuery
-from ..application.queries import Query
-from ..domain.events import DomainEvent
-from ..domain.repositories import GenericRepository
-from ..infrastructure.database.session import DataBaseSession
-from ..infrastructure.database.sqlalchemy import SqlAlchemySession
+from pybus.application import ApplicationModule
+from pybus.application.commands import Command
+from pybus.application.common.pagination import PaginationQuery
+from pybus.application.queries import Query
+from pybus.domain.events import DomainEvent
+from pybus.domain.repositories import GenericRepository
+from pybus.infrastructure.database.session import DataBaseSession
+from pybus.infrastructure.database.sqlalchemy import SqlAlchemySession
+
 from .config import ApplicationSettings
 from .transaction import DependencyProvider, TransactionContainer, TransactionContext
 
@@ -29,11 +30,11 @@ def create_application(
         application.include_module(module)
 
     @application.on_enter_transaction_context
-    async def on_enter_transaction_context(context: TransactionContext) -> None:  # pyright: ignore[reportUnusedFunction]
+    async def on_enter_transaction_context(context: TransactionContext) -> None:
         context.set_dependency("publish_event", context.publish_event)
 
     @application.on_exit_transaction_context
-    async def on_exit_transaction_context(  # pyright: ignore[reportUnusedFunction]
+    async def on_exit_transaction_context(
         context: TransactionContext, exc_val: BaseException | None
     ) -> None:
         session = context.get_dependency(DataBaseSession)
@@ -44,7 +45,7 @@ def create_application(
         session.close()
 
     @application.transaction_middleware
-    async def event_collector_middleware(  # pyright: ignore[reportUnusedFunction]
+    async def event_collector_middleware(
         context: TransactionContext, call_next: Callable[[], Awaitable[Any]]
     ) -> Any:
         result = await call_next()

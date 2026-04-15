@@ -1,23 +1,24 @@
 from datetime import datetime
 from typing import cast
-from sqlalchemy import event, true, DDL, Connection
-from sqlalchemy.orm import ORMExecuteState, with_loader_criteria, Session
+
+from sqlalchemy import DDL, Connection, event, true
+from sqlalchemy.orm import ORMExecuteState, Session, with_loader_criteria
 from sqlalchemy.sql import ColumnElement
 from sqlalchemy.sql.schema import SchemaItem
 
-from .mixins import SoftDeleteMixin
 from .base import Base
+from .mixins import SoftDeleteMixin
 
 
 @event.listens_for(Base.metadata, "before_create")
-def before_create(target: SchemaItem, connection: Connection, **kw: object):  # pyright: ignore[reportUnusedParameter]
+def before_create(target: SchemaItem, connection: Connection, **kw: object):
     if connection.dialect.name == "postgresql":
         pg_trgm_ddl = DDL("CREATE EXTENSION IF NOT EXISTS pg_trgm")
         _ = connection.execute(pg_trgm_ddl)
 
 
 @event.listens_for(Session, "before_flush", propagate=True)
-def before_flush(session: Session, flush_context, instances):  # pyright: ignore[reportUnusedParameter, reportUnknownParameterType, reportMissingParameterType]
+def before_flush(session: Session, flush_context, instances):
     for obj in session.deleted:
         if isinstance(obj, SoftDeleteMixin):
             session.expunge(obj)

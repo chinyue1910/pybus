@@ -10,11 +10,11 @@ from uuid import UUID
 from dependency_injector import containers, providers
 from kafka import KafkaProducer
 
-from ..application.commands import Command
-from ..application.queries import Query
-from ..application.common.pagination import PaginationQuery
-from ..domain.events import DomainEvent
-from ..infrastructure.database.session import DataBaseSession
+from pybus.application.commands import Command
+from pybus.application.common.pagination import PaginationQuery
+from pybus.application.queries import Query
+from pybus.domain.events import DomainEvent
+from pybus.infrastructure.database.session import DataBaseSession
 
 
 class TransactionContainer(containers.DeclarativeContainer):
@@ -290,7 +290,7 @@ class TransactionContext:
         correlation_id = self.get_dependency(UUID)
 
         message.correlation_id = correlation_id
-        kafka_producer.send(  # pyright: ignore[reportUnknownMemberType]
+        kafka_producer.send(
             topic=self.DOMAIN_EVENTS_TOPIC,
             value=message.model_dump_json().encode("utf-8"),
             key=str(message.aggregate_id).encode("utf-8"),

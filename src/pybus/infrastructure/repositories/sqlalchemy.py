@@ -6,10 +6,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import Select
 
-from ...domain.entities import AggregateRoot
-from ...domain.events import DomainEvent
-from ...domain.exceptions import EntityNotFoundException, SoftDeleteException
-from ...domain.repositories import GenericRepository
+from pybus.domain.entities import AggregateRoot
+from pybus.domain.events import DomainEvent
+from pybus.domain.exceptions import EntityNotFoundException, SoftDeleteException
+from pybus.domain.repositories import GenericRepository
+
 from ..database.sqlalchemy import Base, SoftDeleteMixin
 from ..models.sqlalchemy import DomainEvent as DomainEventModel
 

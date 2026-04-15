@@ -24,14 +24,12 @@ class GenericRepository[TEntity: Entity](ABC):
     @overload
     async def get_all(
         self, page: None = None, size: None = None, skip_filter: bool = False
-    ) -> list[TEntity]:
-        raise NotImplementedError()
+    ) -> list[TEntity]: ...
 
     @overload
     async def get_all(
         self, page: int = 1, size: int = 10, skip_filter: bool = False
-    ) -> tuple[int, list[TEntity]]:
-        raise NotImplementedError()
+    ) -> tuple[int, list[TEntity]]: ...
 
     @abstractmethod
     async def get_all(
