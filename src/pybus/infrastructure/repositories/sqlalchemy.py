@@ -1,5 +1,6 @@
 import uuid
 from abc import ABC, abstractmethod
+from datetime import datetime
 from typing import overload, override
 
 from sqlalchemy import func, select
@@ -54,9 +55,9 @@ class SqlAlchemyGenericRepository[TEntity: AggregateRoot, TModel: Base](
 
     @override
     async def get_by_id(self, entity_id: uuid.UUID, skip_filter: bool = False) -> TEntity | None:
-        stmt = self._default_stmt.where(
-            getattr(self.orm_model, "id") == entity_id
-        ).execution_options(skip_filter=skip_filter and issubclass(self.orm_model, SoftDeleteMixin))
+        stmt = self._default_stmt.where(getattr(self.orm_model, "id") == entity_id)
+        if skip_filter and issubclass(self.orm_model, SoftDeleteMixin):
+            stmt = stmt.where(self.orm_model.deleted_at.is_(None))
         instance = self._session.scalar(stmt)
         return await self._get_entity(instance) if instance else None
 
@@ -64,9 +65,9 @@ class SqlAlchemyGenericRepository[TEntity: AggregateRoot, TModel: Base](
     async def get_by_ids(
         self, entity_ids: list[uuid.UUID], skip_filter: bool = False
     ) -> list[TEntity]:
-        stmt = self._default_stmt.where(
-            getattr(self.orm_model, "id").in_(entity_ids)
-        ).execution_options(skip_filter=skip_filter and issubclass(self.orm_model, SoftDeleteMixin))
+        stmt = self._default_stmt.where(getattr(self.orm_model, "id").in_(entity_ids))
+        if skip_filter and issubclass(self.orm_model, SoftDeleteMixin):
+            stmt = stmt.where(self.orm_model.deleted_at.is_(None))
         instances = self._session.scalars(stmt).all()
         return [await self._get_entity(instance) for instance in instances]
 
@@ -84,9 +85,9 @@ class SqlAlchemyGenericRepository[TEntity: AggregateRoot, TModel: Base](
     async def get_all(
         self, page: int | None = None, size: int | None = None, skip_filter: bool = False
     ) -> list[TEntity] | tuple[int, list[TEntity]]:
-        stmt = self._default_stmt.execution_options(
-            skip_filter=skip_filter and issubclass(self.orm_model, SoftDeleteMixin)
-        )
+        stmt = self._default_stmt
+        if skip_filter and issubclass(self.orm_model, SoftDeleteMixin):
+            stmt = stmt.where(self.orm_model.deleted_at.is_(None))
         if page is not None and size is not None:
             total, instances = await self._paginate(stmt, page or 1, size or 10)
             return total, [await self._get_entity(instance) for instance in instances]
@@ -136,7 +137,7 @@ class SqlAlchemyGenericRepository[TEntity: AggregateRoot, TModel: Base](
             )
 
         instance = await self._entity_to_model(entity)
-        instance = self._session.merge(instance)
+        self._session.merge(instance)
 
     @override
     async def persist_all(self):
@@ -169,7 +170,11 @@ class SqlAlchemyGenericRepository[TEntity: AggregateRoot, TModel: Base](
                 repository_name=self.__class__.__name__, entity_id=entity.id
             )
 
-        self._session.delete(instance)
+        if isinstance(instance, SoftDeleteMixin):
+            instance.deleted_at = datetime.now()
+            self._session.merge(instance)
+        else:
+            self._session.delete(instance)
 
     @override
     async def restore(self, entity: TEntity):
